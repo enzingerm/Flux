@@ -781,6 +781,59 @@ class PropInterval {
     }
 }
 
+class PropMovingAverage {
+    constructor(args = {}) {
+        const self = this;
+        this.default     = existance(args.default, this.getDefaults().default);
+        this.values = existance(args.values, this.getDefaults().values);
+        this.window    = existance(args.window, this.getDefaults().window);
+        this.dataMaxValidity = existance(args.dataMaxValidity, this.getDefaults().dataMaxValidity);
+        this.state       = existance(args.state, this.getDefaults().default);
+        this.prop        = existance(args.prop, this.getDefaults().prop);
+        this.effect      = existance(args.effect, this.getDefaults().effect);
+        this.start();
+    }
+    getDefaults() {
+        const self = this;
+        return {
+            default: 0,
+            values: [],
+            window: 5000,
+            dataMaxValidity: 2000,
+            prop: '',
+            effect: '',
+        };
+    }
+    start() {
+        this.subs();
+    }
+    stop() {
+        this.unsubs();
+    }
+    reset() {
+        this.values = [];
+    }
+    subs() {
+        const self = this;
+        this.abortController = new AbortController();
+        this.signal = { signal: self.abortController.signal };
+
+        xf.sub(`${this.prop}`, this.onUpdate.bind(this), this.signal);
+    }
+    unsubs() {
+        this.abortController.abort();
+    }
+    onUpdate(propValue) {
+        const now = new Date();
+        this.values = this.values.filter(([ date, _ ]) => now - date < this.window);
+        this.values.push([ now, propValue ]);
+        this.state = this.values.reduce(([ prev_date, prev_value ], [ date, value ]) => {
+            return [ date, prev_value + Math.min(this.dataMaxValidity, this.window, (date - prev_date)) / this.window * value ];
+        }, [ now - this.window, 0 ])[1];
+        xf.dispatch(`${this.effect}`, this.state);
+    }
+}
+
 class PowerInZone {
     constructor(args = {}) {
         const self = this;
